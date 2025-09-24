@@ -64,3 +64,20 @@ type Setting struct {
 	Key   string `json:"key" form:"key"`
 	Value string `json:"value" form:"value"`
 }
+
+
+type Subscription struct {
+	Id         int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	UserId     int    `json:"-"`
+	Token      string `json:"token" form:"token" gorm:"unique"`
+	Remark     string `json:"remark" form:"remark"`
+	Enable     bool   `json:"enable" form:"enable"`
+	ExpiryTime int64  `json:"expiryTime" form:"expiryTime"`
+
+	// Inbound Config
+	SampleId   		int	  `json:"sampleId" form:"sampleId"`
+	AvailableCount  int	  `json:"availableCount" form:"availableCount"`
+	AutoUpdate     bool   `json:"autoUpdate" form:"autoUpdate"`
+	AutoDelete     bool   `json:"autoDelete" form:"autoDelete"`
+	InboundIds     string  `json:"inboundIds" form:"inboundIds"`
+}

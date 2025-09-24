@@ -43,9 +43,18 @@
                 </transition>
                 <transition name="list" appear>
                     <a-card hoverable>
-                        <div slot="title">
-                            <a-button type="primary" icon="plus" @click="openAddInbound"></a-button>
+                        <div slot="title" style="display: flex; flex-direction: row;align-items: center;">
+                            <a-button type="primary" icon="plus" @click="openAddInbound">添加</a-button>
+                            <a-tooltip placement="topRight" title="打开包括订阅节点" arrow-point-at-center>
+                                <a-switch style="margin-left: 20px;"
+                                    v-model:checked="includeSubscriptions"
+                                    checked-children="订阅节点" un-checked-children="订阅节点" 
+                                    @change="switchIncludeSubscriptions"
+                                >
+                                </a-switch>
+                            </a-tooltip>
                         </div>
+
 <!--                        <a-input v-model="searchKey" placeholder="搜索" autofocus style="max-width: 300px"></a-input>-->
                         <a-table :columns="columns" :row-key="dbInbound => dbInbound.id"
                                  :data-source="dbInbounds"
@@ -62,6 +71,9 @@
                                         </a-menu-item>
                                         <a-menu-item key="edit">
                                             <a-icon type="edit"></a-icon>编辑
+                                        </a-menu-item>
+                                        <a-menu-item key="copy">
+                                            <a-icon type="copy"></a-icon>复制
                                         </a-menu-item>
                                         <a-menu-item key="resetTraffic">
                                             <a-icon type="retweet"></a-icon>重置流量
@@ -181,14 +193,27 @@
             inbounds: [],
             dbInbounds: [],
             searchKey: '',
+            allSettings: {},
+            includeSubscriptions: false
         },
         methods: {
+            switchIncludeSubscriptions(flag) {
+                const that = this
+                this.getDBInbounds()
+            },
             loading(spinning=true) {
                 this.spinning = spinning;
             },
+            async getAllSettings() {
+                const res = await HttpUtil.post('/xui/setting/all');
+                if (!res.success) {
+                    return;
+                }
+                this.allSettings = res.obj;
+            },
             async getDBInbounds() {
                 this.loading();
-                const msg = await HttpUtil.post('/xui/inbound/list');
+                const msg = await HttpUtil.post('/xui/inbound/list?tag='+(this.includeSubscriptions?'all':'inbound'));
                 this.loading(false);
                 if (!msg.success) {
                     return;
@@ -224,6 +249,9 @@
                     case "edit":
                         this.openEditInbound(dbInbound);
                         break;
+                    case "copy":
+                        this.openCopyInbound(dbInbound);
+                        break;
                     case "resetTraffic":
                         this.resetTraffic(dbInbound);
                         break;
@@ -236,6 +264,28 @@
                 inModal.show({
                     title: '添加入站',
                     okText: '添加',
+                    allSettings: this.allSettings,
+                    confirm: async (inbound, dbInbound) => {
+                        inModal.loading();
+                        await this.addInbound(inbound, dbInbound);
+                        inModal.close();
+                    }
+                });
+            },
+            openCopyInbound(dbInbound) {
+                const inbound = dbInbound.toInbound();
+                inbound.id = null
+                inbound.remark = `${inbound.remark}-copy`;
+                const id = RandomUtil.randomUUID()
+                inbound.port = RandomUtil.randomIntRange(this.allSettings.configPortStart||10000, this.allSettings.configPortEnd||60000)
+                inbound.settings[inbound.settings.protocol+'es'][0].id = id
+                inbound.settings.id = id
+                console.log("inbound", inbound)
+                inModal.show({
+                    title: '复制入站',
+                    okText: '确定',
+                    inbound: inbound,
+                    dbInbound: dbInbound,
                     confirm: async (inbound, dbInbound) => {
                         inModal.loading();
                         await this.addInbound(inbound, dbInbound);
@@ -317,7 +367,8 @@
                 });
             },
             showQrcode(dbInbound) {
-                const link = dbInbound.genLink();
+                const link = dbInbound.genLink(this.allSettings);
+                console.log("link: ", link )
                 qrModal.show('二维码', link);
             },
             showInfo(dbInbound) {
@@ -339,6 +390,7 @@
             }
         },
         mounted() {
+            this.getAllSettings();
             this.getDBInbounds();
         },
         computed: {

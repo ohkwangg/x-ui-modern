@@ -35,7 +35,17 @@
                         <a-button type="primary" :disabled="saveBtnDisable" @click="updateAllSetting">保存配置</a-button>
                         <a-button type="danger" :disabled="!saveBtnDisable" @click="restartPanel">重启面板</a-button>
                     </a-space>
-                    <a-tabs default-active-key="1">
+                    <a-tabs default-active-key="10">
+                        <a-tab-pane key="10" tab="快捷配置">
+                            <a-list item-layout="horizontal" style="background: white">
+                                <setting-list-item type="text" title="连接IP" desc="默认''(空,使用地址栏域名)" v-model="allSetting.configConnectIp"></setting-list-item>
+                                <setting-list-item type="number" title="入站起始端口" desc="默认10000" v-model.number="allSetting.configPortStart"></setting-list-item>
+                                <setting-list-item type="number" title="入站结束端口" desc="默认60000" v-model.number="allSetting.configPortEnd"></setting-list-item>
+                                <setting-list-item type="text" title="入站TLS证书公钥文件路径" desc="填写一个 '/' 开头的绝对路径" v-model="allSetting.configCertFile"></setting-list-item>
+                                <setting-list-item type="text" title="入站TLS证书密钥文件路径" desc="填写一个 '/' 开头的绝对路径" v-model="allSetting.configKeyFile"></setting-list-item>
+                                <setting-list-item type="text" title="入站TLS证书域名" desc="不要https开头" v-model="allSetting.configCertDomain"></setting-list-item>
+                            </a-list>
+                        </a-tab-pane>
                         <a-tab-pane key="1" tab="面板配置">
                             <a-list item-layout="horizontal" style="background: white">
                                 <setting-list-item type="text" title="面板监听 IP" desc="默认留空监听所有 IP，重启面板生效" v-model="allSetting.webListen"></setting-list-item>
@@ -113,6 +123,7 @@
                 this.loading(true);
                 const msg = await HttpUtil.post("/xui/setting/all");
                 this.loading(false);
+                console.log("msg", msg)
                 if (msg.success) {
                     this.oldAllSetting = new AllSetting(msg.obj);
                     this.allSetting = new AllSetting(msg.obj);

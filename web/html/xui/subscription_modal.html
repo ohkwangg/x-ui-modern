@@ -1,0 +1,63 @@
+{{define "subscriptionModal"}}
+<a-modal id="subscription-modal" v-model="subModal.visible" :title="subModal.title" @ok="subModal.ok"
+         :confirm-loading="subModal.confirmLoading" :closable="true" :mask-closable="false"
+         :ok-text="subModal.okText" cancel-text='{{ i18n "close" }}'>
+    {{template "form/subscription"}}
+</a-modal>
+<script>
+
+    const subModal = {
+        title: '',
+        visible: false,
+        confirmLoading: false,
+        okText: '确定',
+        confirm: null,
+        inbounds: [],
+        subscription: new Object(),
+        ok() {
+            if (subModal.subscription._expiryTime) {
+                subModal.subscription.expiryTime = subModal.subscription._expiryTime.toDate().getTime();
+            }
+            ObjectUtil.execute(subModal.confirm, subModal.subscription);
+        },
+        show({ allSettings={}, title='', okText='确定', 
+            subscription=new Object(), 
+            inbounds=[],
+            confirm=(subscription)=>{} 
+        }) {
+            this.title = title;
+            this.okText = okText;
+            this.inbounds = inbounds;
+            this.subscription = subscription;
+            if (subscription.expiryTime) {
+                this.subscription._expiryTime = moment(subscription.expiryTime);
+            }
+            
+            this.confirm = confirm;
+            this.visible = true;
+        },
+        close() {
+            subModal.visible = false;
+            subModal.loading(false);
+        },
+        loading(loading) {
+            subModal.confirmLoading = loading;
+        },
+    };
+
+    new Vue({
+        delimiters: ['[[', ']]'],
+        el: '#subscription-modal',
+        data: {
+            subModal: subModal,
+            get subscription() {
+                return subModal.subscription;
+            }
+        },
+        methods: {
+            
+        }
+    });
+
+</script>
+{{end}}

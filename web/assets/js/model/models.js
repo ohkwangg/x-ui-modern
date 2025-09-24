@@ -28,6 +28,7 @@ class Msg {
 class DBInbound {
 
     constructor(data) {
+        
         this.id = 0;
         this.userId = 0;
         this.up = 0;
@@ -84,7 +85,7 @@ class DBInbound {
     }
 
     get address() {
-        let address = location.hostname;
+        let address = typeof location !== "undefined" ? location.hostname : "";
         if (!ObjectUtil.isEmpty(this.listen) && this.listen !== "0.0.0.0") {
             address = this.listen;
         }
@@ -149,15 +150,21 @@ class DBInbound {
         }
     }
 
-    genLink() {
+    genLink(allSetting) {
         const inbound = this.toInbound();
-        return inbound.genLink(this.address, this.remark);
+        return inbound.genLink(this.address, this.remark, allSetting);
     }
 }
 
 class AllSetting {
 
     constructor(data) {
+        this.configConnectIp = '';
+        this.configPortStart = 50000;
+        this.configPortEnd = 60000;
+        this.configCertDomain = "";
+        this.configCertFile = "";
+        this.configKeyFile = "";
         this.webListen = "";
         this.webPort = 54321;
         this.webCertFile = "";

@@ -17,13 +17,19 @@
         ok() {
             ObjectUtil.execute(inModal.confirm, inModal.inbound, inModal.dbInbound);
         },
-        show({ title='', okText='确定', inbound=null, dbInbound=null, confirm=(inbound, dbInbound)=>{} }) {
+        show({ allSettings={}, title='', okText='确定', inbound=null, dbInbound=null, confirm=(inbound, dbInbound)=>{} }) {
             this.title = title;
             this.okText = okText;
             if (inbound) {
                 this.inbound = Inbound.fromJson(inbound.toJson());
             } else {
                 this.inbound = new Inbound();
+                this.inbound.port=RandomUtil.randomIntRange(allSettings.configPortStart||10000, 
+            allSettings.configPortEnd||60000)
+        this.inbound.stream.tls.server = allSettings.configCertDomain||''
+        this.inbound.stream.tls.certs[0].certFile = allSettings.configCertFile||''
+        this.inbound.stream.tls.certs[0].keyFile = allSettings.configKeyFile||''
+
             }
             if (dbInbound) {
                 this.dbInbound = new DBInbound(dbInbound);

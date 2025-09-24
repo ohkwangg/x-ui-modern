@@ -14,6 +14,61 @@ import (
 type InboundService struct {
 }
 
+func (s *InboundService) GetInboundsForSub(userId int) ([]*model.Inbound, error) {
+	db := database.GetDB()
+	var inbounds []*model.Inbound
+	protocols := []string{
+		string(model.VLESS),
+		string(model.VMess),
+		string(model.Shadowsocks),
+		string(model.Trojan),
+	}
+	err := db.Model(model.Inbound{}).Where("user_id = ? and tag like 'inbound-%' and protocol in(?)", userId, protocols).Find(&inbounds).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return inbounds, nil
+}
+func (s *InboundService) GetInboundsByIds(ids []int) ([]*model.Inbound, error) {
+	db := database.GetDB()
+	var inbounds []*model.Inbound
+	err := db.Model(model.Inbound{}).Where("id in (?)", ids).Find(&inbounds).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return inbounds, nil
+}
+func (s *InboundService) DelInboundsByIds(ids []int) error {
+	db := database.GetDB()
+	err := db.Where("id in (?)", ids).Delete(&model.Inbound{}).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return err
+	}
+	return nil
+}
+func (s *InboundService) InnerDelInboundsByIds(tx *gorm.DB, ids []int) error {
+	err := tx.Where("id in (?)", ids).Delete(&model.Inbound{}).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return err
+	}
+	return nil
+}
+func (s *InboundService) UpdInboundsStatusByIds(tx *gorm.DB, ids []int, enable bool, expireTime int64) error {
+	err := tx.Model(&model.Inbound{}).Where("id in (?)", ids).Update("enable", enable).Update("expiry_time", expireTime).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return err
+	}
+	return nil
+}
+func (s *InboundService) GetInboundsByTag(userId int, tag string) ([]*model.Inbound, error) {
+	db := database.GetDB()
+	var inbounds []*model.Inbound
+	err := db.Model(model.Inbound{}).Where("user_id = ? and tag like ? || '%'", userId, tag).Find(&inbounds).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return inbounds, nil
+}
 func (s *InboundService) GetInbounds(userId int) ([]*model.Inbound, error) {
 	db := database.GetDB()
 	var inbounds []*model.Inbound
@@ -48,6 +103,10 @@ func (s *InboundService) checkPortExist(port int, ignoreId int) (bool, error) {
 	return count > 0, nil
 }
 
+func (s *InboundService) CheckPortExist(port int) (bool, error) {
+	return s.checkPortExist(port, 0)
+}
+
 func (s *InboundService) AddInbound(inbound *model.Inbound) error {
 	exist, err := s.checkPortExist(inbound.Port, 0)
 	if err != nil {
@@ -59,7 +118,39 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) error {
 	db := database.GetDB()
 	return db.Save(inbound).Error
 }
+func (s *InboundService) AddSubInbounds(inbounds []*model.Inbound) ([]int, error) {
+	for _, inbound := range inbounds {
+		exist, err := s.checkPortExist(inbound.Port, 0)
+		if err != nil {
+			return nil, err
+		}
+		if exist {
+			return nil, common.NewError("端口已存在:", inbound.Port)
+		}
+	}
 
+	db := database.GetDB()
+	tx := db.Begin()
+	var err error
+	defer func() {
+		if err == nil {
+			tx.Commit()
+		} else {
+			tx.Rollback()
+		}
+	}()
+	ids := make([]int, 0)
+	for _, inbound := range inbounds {
+		err = tx.Save(&inbound).Error
+		if err != nil {
+			return nil, err
+		}
+		fmt.Printf("新增节点ID：%v \n", inbound.Id)
+		ids = append(ids, inbound.Id)
+	}
+
+	return ids, nil
+}
 func (s *InboundService) AddInbounds(inbounds []*model.Inbound) error {
 	for _, inbound := range inbounds {
 		exist, err := s.checkPortExist(inbound.Port, 0)

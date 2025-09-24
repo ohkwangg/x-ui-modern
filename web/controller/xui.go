@@ -9,6 +9,7 @@ type XUIController struct {
 
 	inboundController *InboundController
 	settingController *SettingController
+	subscriptionController *SubscriptionController
 }
 
 func NewXUIController(g *gin.RouterGroup) *XUIController {
@@ -23,10 +24,12 @@ func (a *XUIController) initRouter(g *gin.RouterGroup) {
 
 	g.GET("/", a.index)
 	g.GET("/inbounds", a.inbounds)
+	g.GET("/subscriptions", a.subscriptions)
 	g.GET("/setting", a.setting)
-
+	
 	a.inboundController = NewInboundController(g)
 	a.settingController = NewSettingController(g)
+	a.subscriptionController = NewSubscriptionController(g)
 }
 
 func (a *XUIController) index(c *gin.Context) {
@@ -39,4 +42,7 @@ func (a *XUIController) inbounds(c *gin.Context) {
 
 func (a *XUIController) setting(c *gin.Context) {
 	html(c, "setting.html", "设置", nil)
+}
+func (a *XUIController) subscriptions(c *gin.Context) {
+	html(c, "subscriptions.html", "订阅列表", nil)
 }

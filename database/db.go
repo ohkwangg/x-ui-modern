@@ -1,14 +1,16 @@
 package database
 
 import (
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	"github.com/glebarez/sqlite"
+	// "github.com/glebarez/sqlite"
 	"io/fs"
 	"os"
 	"path"
 	"x-ui/config"
 	"x-ui/database/model"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var db *gorm.DB
@@ -39,6 +41,10 @@ func initInbound() error {
 
 func initSetting() error {
 	return db.AutoMigrate(&model.Setting{})
+}
+
+func initSubscription() error {
+	return db.AutoMigrate(&model.Subscription{})
 }
 
 func InitDB(dbPath string) error {
@@ -73,6 +79,10 @@ func InitDB(dbPath string) error {
 		return err
 	}
 	err = initSetting()
+	if err != nil {
+		return err
+	}
+	err = initSubscription()
 	if err != nil {
 		return err
 	}

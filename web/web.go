@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"embed"
+	"fmt"
 	"html/template"
 	"io"
 	"io/fs"
@@ -46,6 +47,7 @@ type wrapAssetsFS struct {
 }
 
 func (f *wrapAssetsFS) Open(name string) (fs.File, error) {
+	fmt.Printf("open assets: %s\n", name)
 	file, err := f.FS.Open("assets/" + name)
 	if err != nil {
 		return nil, err
@@ -84,15 +86,19 @@ type Server struct {
 	index  *controller.IndexController
 	server *controller.ServerController
 	xui    *controller.XUIController
+	sub    *controller.SubscriptionController
 
-	xrayService    service.XrayService
-	settingService service.SettingService
-	inboundService service.InboundService
+	xrayService         service.XrayService
+	settingService      service.SettingService
+	inboundService      service.InboundService
+	subscriptionService service.SubscriptionService
 
 	cron *cron.Cron
 
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	afs wrapAssetsFS
 }
 
 func NewServer() *Server {
@@ -103,6 +109,11 @@ func NewServer() *Server {
 	}
 }
 
+func (s *Server) ReadAssets(path string) ([]byte, error) {
+	content, err := assetsFS.ReadFile("assets/" + path)
+	fs.ReadFile(&s.afs, path)
+	return content, err
+}
 func (s *Server) getHtmlFiles() ([]string, error) {
 	files := make([]string, 0)
 	dir, _ := os.Getwd()
@@ -206,6 +217,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	s.index = controller.NewIndexController(g)
 	s.server = controller.NewServerController(g)
 	s.xui = controller.NewXUIController(g)
+	s.sub = controller.NewSubscriptionController(g)
 
 	return engine, nil
 }

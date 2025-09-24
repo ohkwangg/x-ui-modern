@@ -2,13 +2,14 @@ package controller
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"strconv"
 	"x-ui/database/model"
 	"x-ui/logger"
 	"x-ui/web/global"
 	"x-ui/web/service"
 	"x-ui/web/session"
+
+	"github.com/gin-gonic/gin"
 )
 
 type InboundController struct {
@@ -30,6 +31,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/add", a.addInbound)
 	g.POST("/del/:id", a.delInbound)
 	g.POST("/update/:id", a.updateInbound)
+	g.POST("/forsub", a.getInboundsForSub)
 }
 
 func (a *InboundController) startTask() {
@@ -45,14 +47,34 @@ func (a *InboundController) startTask() {
 	})
 }
 
-func (a *InboundController) getInbounds(c *gin.Context) {
+func (a *InboundController) getInboundsForSub(c *gin.Context) {
 	user := session.GetLoginUser(c)
-	inbounds, err := a.inboundService.GetInbounds(user.Id)
+	inbounds, err := a.inboundService.GetInboundsForSub(user.Id)
 	if err != nil {
 		jsonMsg(c, "获取", err)
 		return
 	}
 	jsonObj(c, inbounds, nil)
+}
+
+func (a *InboundController) getInbounds(c *gin.Context) {
+	user := session.GetLoginUser(c)
+	tag := c.Query("tag")
+	if tag == "" || tag == "all" {
+		inbounds, err := a.inboundService.GetInbounds(user.Id)
+		if err != nil {
+			jsonMsg(c, "获取", err)
+			return
+		}
+		jsonObj(c, inbounds, nil)
+	} else {
+		inbounds, err := a.inboundService.GetInboundsByTag(user.Id, tag)
+		if err != nil {
+			jsonMsg(c, "获取", err)
+			return
+		}
+		jsonObj(c, inbounds, nil)
+	}
 }
 
 func (a *InboundController) addInbound(c *gin.Context) {

@@ -21,6 +21,13 @@ import (
 var xrayTemplateConfig string
 
 var defaultValueMap = map[string]string{
+
+	"configConnectIp":    "",
+	"configPortStart":    "50000",
+	"configPortEnd":      "60000",
+	"configCertDomain":   "",
+	"configCertFile":     "",
+	"configKeyFile":      "",
 	"xrayTemplateConfig": xrayTemplateConfig,
 	"webListen":          "",
 	"webPort":            "54321",

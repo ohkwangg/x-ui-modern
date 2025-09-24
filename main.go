@@ -52,12 +52,14 @@ func runWebServer() {
 
 	sigCh := make(chan os.Signal, 1)
 	//信号量捕获处理
-	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGKILL)
+	signal.Notify(sigCh, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGKILL)
 	for {
 		sig := <-sigCh
 
 		switch sig {
 		case syscall.SIGHUP:
+		case syscall.SIGQUIT:
+			logger.Info("restart server ...")
 			err := server.Stop()
 			if err != nil {
 				logger.Warning("stop server err:", err)

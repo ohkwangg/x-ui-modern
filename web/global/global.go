@@ -2,8 +2,9 @@ package global
 
 import (
 	"context"
-	"github.com/robfig/cron/v3"
 	_ "unsafe"
+
+	"github.com/robfig/cron/v3"
 )
 
 var webServer WebServer
@@ -11,6 +12,7 @@ var webServer WebServer
 type WebServer interface {
 	GetCron() *cron.Cron
 	GetCtx() context.Context
+	ReadAssets(path string) ([]byte, error) // open file
 }
 
 func SetWebServer(s WebServer) {
