@@ -1,7 +1,7 @@
 package service
 
 import (
-	"fmt"
+	"sync"
 	"time"
 	"x-ui/database"
 	"x-ui/database/model"
@@ -10,6 +10,8 @@ import (
 
 	"gorm.io/gorm"
 )
+
+var inboundWriteLock sync.Mutex
 
 type InboundService struct {
 }
@@ -20,6 +22,9 @@ func (s *InboundService) GetInbounds(userId int) ([]*model.Inbound, error) {
 	err := db.Model(model.Inbound{}).Where("user_id = ?", userId).Find(&inbounds).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	for _, inbound := range inbounds {
+		inbound.SetSharePublicKey()
 	}
 	return inbounds, nil
 }
@@ -35,6 +40,9 @@ func (s *InboundService) GetAllInbounds() ([]*model.Inbound, error) {
 }
 
 func (s *InboundService) checkPortExist(port int, ignoreId int) (bool, error) {
+	if port == 0 {
+		return false, nil
+	}
 	db := database.GetDB()
 	db = db.Model(model.Inbound{}).Where("port = ?", port)
 	if ignoreId > 0 {
@@ -49,6 +57,19 @@ func (s *InboundService) checkPortExist(port int, ignoreId int) (bool, error) {
 }
 
 func (s *InboundService) AddInbound(inbound *model.Inbound) error {
+	inboundWriteLock.Lock()
+	defer inboundWriteLock.Unlock()
+	if err := validateInboundShape(inbound); err != nil {
+		return err
+	}
+	tag, err := inboundTag(inbound)
+	if err != nil {
+		return err
+	}
+	inbound.Tag = tag
+	if err := s.validateWithCore(inbound); err != nil {
+		return err
+	}
 	exist, err := s.checkPortExist(inbound.Port, 0)
 	if err != nil {
 		return err
@@ -108,6 +129,11 @@ func (s *InboundService) GetInbound(id int) (*model.Inbound, error) {
 }
 
 func (s *InboundService) UpdateInbound(inbound *model.Inbound) error {
+	inboundWriteLock.Lock()
+	defer inboundWriteLock.Unlock()
+	if err := validateInboundShape(inbound); err != nil {
+		return err
+	}
 	exist, err := s.checkPortExist(inbound.Port, inbound.Id)
 	if err != nil {
 		return err
@@ -118,6 +144,17 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) error {
 
 	oldInbound, err := s.GetInbound(inbound.Id)
 	if err != nil {
+		return err
+	}
+	if inbound.Protocol == "tun" && oldInbound.Protocol == "tun" {
+		inbound.Tag = oldInbound.Tag
+	} else {
+		inbound.Tag, err = inboundTag(inbound)
+		if err != nil {
+			return err
+		}
+	}
+	if err := s.validateWithCore(inbound); err != nil {
 		return err
 	}
 	oldInbound.Up = inbound.Up
@@ -132,7 +169,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) error {
 	oldInbound.Settings = inbound.Settings
 	oldInbound.StreamSettings = inbound.StreamSettings
 	oldInbound.Sniffing = inbound.Sniffing
-	oldInbound.Tag = fmt.Sprintf("inbound-%v", inbound.Port)
+	oldInbound.Tag = inbound.Tag
 
 	db := database.GetDB()
 	return db.Save(oldInbound).Error

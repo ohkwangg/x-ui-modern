@@ -44,6 +44,7 @@ class DBInbound {
         this.streamSettings = "";
         this.tag = "";
         this.sniffing = "";
+        this.sharePublicKey = "";
 
         if (data == null) {
             return;
@@ -134,24 +135,17 @@ class DBInbound {
             tag: this.tag,
             sniffing: sniffing,
         };
-        return Inbound.fromJson(config);
+        const inbound = Inbound.fromJson(config);
+        inbound.toJson = () => JSON.parse(JSON.stringify(config));
+        return inbound;
     }
 
     hasLink() {
-        switch (this.protocol) {
-            case Protocols.VMESS:
-            case Protocols.VLESS:
-            case Protocols.TROJAN:
-            case Protocols.SHADOWSOCKS:
-                return true;
-            default:
-                return false;
-        }
+        return !!InboundEditor.shareLink(this);
     }
 
     genLink() {
-        const inbound = this.toInbound();
-        return inbound.genLink(this.address, this.remark);
+        return InboundEditor.shareLink(this);
     }
 }
 

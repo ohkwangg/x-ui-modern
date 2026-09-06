@@ -92,7 +92,11 @@ const seq = [
 class RandomUtil {
 
     static randomIntRange(min, max) {
-        return parseInt(Math.random() * (max - min) + min, 10);
+        const range = max - min;
+        const limit = Math.floor(0x100000000 / range) * range;
+        const data = new Uint32Array(1);
+        do { crypto.getRandomValues(data); } while (data[0] >= limit);
+        return min + data[0] % range;
     }
 
     static randomInt(n) {
@@ -131,9 +135,8 @@ class RandomUtil {
     static randomUUID() {
         let d = new Date().getTime();
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-            let r = (d + Math.random() * 16) % 16 | 0;
-            d = Math.floor(d / 16);
-            return (c === 'x' ? r : (r & 0x7 | 0x8)).toString(16);
+            let r = RandomUtil.randomInt(16);
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
         });
     }
 }

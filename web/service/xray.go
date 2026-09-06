@@ -94,6 +94,9 @@ func (s *XrayService) RestartXray(isForce bool) error {
 	if err != nil {
 		return err
 	}
+	if err := xray.ValidateConfig(xrayConfig); err != nil {
+		return err
+	}
 
 	if p != nil && p.IsRunning() {
 		if !isForce && p.GetConfig().Equals(xrayConfig) {

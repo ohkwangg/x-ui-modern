@@ -1,7 +1,9 @@
 package model
 
 import (
-	"fmt"
+	"crypto/ecdh"
+	"encoding/base64"
+	"encoding/json"
 	"x-ui/util/json_util"
 	"x-ui/xray"
 )
@@ -24,18 +26,19 @@ type User struct {
 }
 
 type Inbound struct {
-	Id         int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
-	UserId     int    `json:"-"`
-	Up         int64  `json:"up" form:"up"`
-	Down       int64  `json:"down" form:"down"`
-	Total      int64  `json:"total" form:"total"`
-	Remark     string `json:"remark" form:"remark"`
-	Enable     bool   `json:"enable" form:"enable"`
-	ExpiryTime int64  `json:"expiryTime" form:"expiryTime"`
+	SharePublicKey string `json:"sharePublicKey,omitempty" gorm:"-"`
+	Id             int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	UserId         int    `json:"-"`
+	Up             int64  `json:"up" form:"up"`
+	Down           int64  `json:"down" form:"down"`
+	Total          int64  `json:"total" form:"total"`
+	Remark         string `json:"remark" form:"remark"`
+	Enable         bool   `json:"enable" form:"enable"`
+	ExpiryTime     int64  `json:"expiryTime" form:"expiryTime"`
 
 	// config part
 	Listen         string   `json:"listen" form:"listen"`
-	Port           int      `json:"port" form:"port" gorm:"unique"`
+	Port           int      `json:"port" form:"port"`
 	Protocol       Protocol `json:"protocol" form:"protocol"`
 	Settings       string   `json:"settings" form:"settings"`
 	StreamSettings string   `json:"streamSettings" form:"streamSettings"`
@@ -43,10 +46,30 @@ type Inbound struct {
 	Sniffing       string   `json:"sniffing" form:"sniffing"`
 }
 
+func (i *Inbound) SetSharePublicKey() {
+	var stream struct {
+		Reality struct {
+			PrivateKey string `json:"privateKey"`
+		} `json:"realitySettings"`
+	}
+	if json.Unmarshal([]byte(i.StreamSettings), &stream) != nil {
+		return
+	}
+	data, err := base64.RawURLEncoding.DecodeString(stream.Reality.PrivateKey)
+	if err != nil {
+		return
+	}
+	key, err := ecdh.X25519().NewPrivateKey(data)
+	if err == nil {
+		i.SharePublicKey = base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes())
+	}
+}
+
 func (i *Inbound) GenXrayInboundConfig() *xray.InboundConfig {
 	listen := i.Listen
 	if listen != "" {
-		listen = fmt.Sprintf("\"%v\"", listen)
+		encoded, _ := json.Marshal(listen)
+		listen = string(encoded)
 	}
 	return &xray.InboundConfig{
 		Listen:         json_util.RawMessage(listen),

@@ -28,6 +28,9 @@
     <p v-if="inbound.tls">tls: <a-tag color="green">开启</a-tag></p>
     <p v-if="inbound.xtls">xtls: <a-tag color="green">开启</a-tag></p>
 </template>
+<template v-else-if="inbound.stream.security === 'reality'">
+    <p>安全: <a-tag color="green">REALITY</a-tag></p>
+</template>
 <template v-else>
     <p>tls: <a-tag color="red">关闭</a-tag></p>
 </template>

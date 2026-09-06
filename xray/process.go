@@ -24,6 +24,9 @@ import (
 var trafficRegex = regexp.MustCompile("(inbound|outbound)>>>([^>]+)>>>traffic>>>(downlink|uplink)")
 
 func GetBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return fmt.Sprintf("xray-windows-%s.exe", runtime.GOARCH)
+	}
 	return fmt.Sprintf("xray-%s-%s", runtime.GOOS, runtime.GOARCH)
 }
 
@@ -126,7 +129,7 @@ func (p *process) refreshAPIPort() {
 }
 
 func (p *process) refreshVersion() {
-	cmd := exec.Command(GetBinaryPath(), "-version")
+	cmd := exec.Command(GetBinaryPath(), "version")
 	data, err := cmd.Output()
 	if err != nil {
 		p.version = "Unknown"
@@ -161,7 +164,7 @@ func (p *process) Start() (err error) {
 		return common.NewErrorf("写入配置文件失败: %v", err)
 	}
 
-	cmd := exec.Command(GetBinaryPath(), "-c", configPath)
+	cmd := exec.Command(GetBinaryPath(), "run", "-config", configPath)
 	p.cmd = cmd
 
 	stdReader, err := cmd.StdoutPipe()

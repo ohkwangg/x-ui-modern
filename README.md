@@ -1,143 +1,87 @@
-# x-ui
+# x-ui-modern
 
-支持多协议多用户的 xray 面板
+**本项目基于 [vaxilu/x-ui](https://github.com/vaxilu/x-ui) 开发**，使用 [XTLS/Xray-core](https://github.com/XTLS/Xray-core) 作为代理核心。保留原 x-ui 的面板整体布局、入站列表、流量统计、到期管理和管理命令，主要更新入站配置选项及兼容性。
 
-# 功能介绍
+这是 `ohkwangg` 维护的独立衍生项目，并非 vaxilu 或 XTLS 官方面板。保留上游 Git 历史和 GPL-3.0 许可证。Xray 使用其自己的 MPL-2.0 许可证，发行包内附核心许可证。
 
-- 系统状态监控
-- 支持多用户多协议，网页可视化操作
-- 支持的协议：vmess、vless、trojan、shadowsocks、dokodemo-door、socks、http
-- 支持配置更多传输配置
-- 流量统计，限制流量，限制到期时间
-- 可自定义 xray 配置模板
-- 支持 https 访问面板（自备域名 + ssl 证书）
-- 支持一键SSL证书申请且自动续签
-- 更多高级配置项，详见面板
+## 安装与升级
 
-# 安装&升级
+支持使用 systemd 的 Linux：amd64、arm64、s390x。建议使用仍受维护的 Debian、Ubuntu 或同类发行版。以 root 执行：
 
-```
-bash <(curl -Ls https://raw.githubusercontent.com/vaxilu/x-ui/master/install.sh)
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/ohkwangg/x-ui-modern/main/install.sh)
 ```
 
-## 手动安装&升级
+安装指定版本：
 
-1. 首先从 https://github.com/vaxilu/x-ui/releases 下载最新的压缩包，一般选择 `amd64`架构
-2. 然后将这个压缩包上传到服务器的 `/root/`目录下，并使用 `root`用户登录服务器
-
-> 如果你的服务器 cpu 架构不是 `amd64`，自行将命令中的 `amd64`替换为其他架构
-
-```
-cd /root/
-rm x-ui/ /usr/local/x-ui/ /usr/bin/x-ui -rf
-tar zxvf x-ui-linux-amd64.tar.gz
-chmod +x x-ui/x-ui x-ui/bin/xray-linux-* x-ui/x-ui.sh
-cp x-ui/x-ui.sh /usr/bin/x-ui
-cp -f x-ui/x-ui.service /etc/systemd/system/
-mv x-ui/ /usr/local/
-systemctl daemon-reload
-systemctl enable x-ui
-systemctl restart x-ui
+```bash
+curl -fsSL https://raw.githubusercontent.com/ohkwangg/x-ui-modern/main/install.sh -o /tmp/x-ui-modern-install.sh
+bash /tmp/x-ui-modern-install.sh v1.0.0
 ```
 
-## 使用docker安装
+安装包来自 [本仓库 Releases](https://github.com/ohkwangg/x-ui-modern/releases)，脚本验证 SHA-256 后安装。首次安装自动生成随机管理员账号和密码并在终端显示，默认面板端口为 `54321`；请保管终端显示的凭据。升级保留 `/etc/x-ui/x-ui.db` 中的账号、面板设置、入站及流量数据，停止服务后备份至 `/var/backups/x-ui/日期-进程号/`。下载失败不会先停掉原服务，安装阶段失败会尝试恢复备份。
 
-> 此 docker 教程与 docker 镜像由[Chasing66](https://github.com/Chasing66)提供
+访问 `http://服务器IP:面板端口/`。可在原“面板设置”里配置 HTTPS。`x-ui` 打开原管理菜单，`x-ui update` 更新到本仓库版本。
 
-1. 安装docker
+## 协议与传输
 
-```shell
-curl -fsSL https://get.docker.com | sh
+首版固定搭配 **Xray v26.3.27**（Go API 模块 `v1.260327.0`）。支持该发行版在 `infra/conf/xray.go` 中注册的全部 **入站** 协议名称：
+
+| 入站协议 | 用途与必要条件 |
+| --- | --- |
+| VMess | UUID 认证的加密代理，现代客户端使用 alterId=0 |
+| VLESS | UUID 认证，支持 TLS / REALITY、Vision 和高级 VLESS Encryption 配置 |
+| Trojan | 密码认证，通常配合 TLS |
+| Shadowsocks | AEAD 与 Shadowsocks 2022，2022 需要规定长度的 Base64 密钥 |
+| SOCKS | 应用代理，支持认证和 UDP |
+| HTTP | HTTP CONNECT 正向代理 |
+| mixed | 同端口兼容 SOCKS 和 HTTP |
+| dokodemo-door / tunnel | 固定目标转发、透明代理；两个名称对应同一实现 |
+| WireGuard | UDP 隧道，需要服务端私钥和客户端公钥 |
+| hysteria | Hysteria 2，协议名为 `hysteria`，搭配 version=2、Hysteria 传输与 TLS |
+| TUN | 系统虚拟网卡，不占用监听端口，需要系统支持及网卡管理权限 |
+
+传输选项包含 raw/TCP、XHTTP、mKCP、WebSocket、HTTPUpgrade、gRPC、Hysteria，保留核心接受的别名。安全选项为 none、TLS、REALITY。协议和传输不能任意组合，保存前由实际安装的核心解析校验。
+
+`freedom/direct`、`blackhole/block`、DNS、loopback 等仅出站协议不会出现在入站下拉框；仍可在原“面板设置 → Xray 配置模板”中配置出站、路由、DNS 和策略。本次未改变该页面的布局。
+
+## 入站选项说明
+
+- 所有新增字段旁边的问号都提供中文功能解释，基本字段也有悬停说明。
+- VMess / VLESS / Trojan / Hysteria 用户支持直接添加、删除与编辑，账号密码不要求手写 JSON。
+- WireGuard / REALITY 支持生成新密钥对；私钥留在服务器，公钥提供给客户端。更换密钥后须同步更新客户端。
+- 协议、传输、安全层和嗅探配置支持高级 JSON，可填写 UI 未单列的选项，例如多用户扩展、fallbacks、sockopt、finalmask、XHTTP extra、VLESS Encryption。
+- 高级 JSON 必须点击“应用 JSON”后才能保存。编辑、重置流量和切换启用状态不会丢弃未知字段。
+- 保存失败保留弹窗和输入，并显示错误。后端调用已安装核心的 `xray convert pb` 解析配置；此方式不会像 `run -test` 一样在检查 TUN 时创建虚拟网卡。校验成功表示配置能够被核心解析，不能替代证书有效性、远端可达性、系统权限与客户端互通检查。
+- TUN 可创建多个入站，每个网卡名称应唯一；不会用虚假的 TCP 端口占位。默认不添加自动系统路由。
+- 常见 VMess、VLESS、Trojan、单用户 Shadowsocks 和 Hysteria 2 配置支持链接/二维码；REALITY 链接自动带上由私钥推导的公钥。链接默认对应第一个用户。没有通用 URI 或需要额外客户端参数的配置（如 WireGuard、TUN、多用户 SS2022、VLESS Encryption）请按实际客户端格式配置，不生成不完整链接。
+
+字段完整语义以 [Xray 官方文档](https://xtls.github.io/config/) 和相应版本源码为准。未来核心新增字段可通过高级 JSON 保留和传递；未来新增协议名称需要更新面板，不能承诺自动支持尚未出现的协议。
+
+## 旧版升级注意
+
+旧 XTLS（`security: xtls`、`xtls-rprx-direct/origin`）、旧 HTTP/H2 传输和旧 QUIC 传输已被新版核心移除。升级不会擅自改变客户端协议或替换密钥：请在入站编辑中迁移到 TLS/REALITY + Vision 或 XHTTP，并同步客户端。旧配置仍保留以便修改；未启用的旧入站可先保存，启用时再执行核心校验。
+
+遇到问题可停止服务，从安装脚本打印的备份目录恢复 `app` 到 `/usr/local/x-ui`、`db` 到 `/etc/x-ui`、`service` 到 `/etc/systemd/system/x-ui.service`、`command` 到 `/usr/bin/x-ui`，然后执行 `systemctl daemon-reload && systemctl start x-ui`。恢复数据库会回到备份时的数据状态。
+
+## 构建与测试
+
+```bash
+go test ./...
+XRAY_BINARY=/path/to/xray node --test tests/*.test.cjs
+bash scripts/package.sh amd64
 ```
 
-2. 安装x-ui
+构建使用 Go 1.27.1 和纯 Go SQLite 驱动，不依赖交叉 C 编译器。`scripts/package.sh` 下载固定版 Xray 并打包其核心、geoip/geosite 数据和许可证。GitHub Actions 对每次提交运行测试，生成三种 Linux 架构安装包；推送 `v*` 标签，或在 Actions 手动运行并填写版本号，会发布带 `SHA256SUMS` 的 Release。
 
-```shell
-mkdir x-ui && cd x-ui
-docker run -itd --network=host \
-    -v $PWD/db/:/etc/x-ui/ \
-    -v $PWD/cert/:/root/cert/ \
-    --name x-ui --restart=unless-stopped \
-    enwaiax/x-ui:latest
-```
+回归测试覆盖全部入站配置、传输选项、REALITY + Vision、Shadowsocks 2022、未知字段往返保留、无效输入拒绝和旧 SQLite UNIQUE 端口约束迁移。TUN 使用核心配置解析验证，不在测试机器创建实际网卡；生产 TUN 路由、外网连通性以及不同客户端互通需按部署环境验证。
 
-> Build 自己的镜像
+Windows 本地调试可通过 `XUI_DB_PATH` 指向隔离数据库，并在运行目录的 `bin/xray-windows-amd64.exe` 放置核心。正式一键安装目标为 Linux。
 
-```shell
-docker build -t x-ui .
-```
+## 致谢与许可证
 
-## SSL证书申请
+- 原始面板：[vaxilu/x-ui](https://github.com/vaxilu/x-ui)
+- 代理核心：[XTLS/Xray-core](https://github.com/XTLS/Xray-core)
+- 所有上游贡献者与依赖项目作者
 
-> 此功能与教程由[FranzKafkaYu](https://github.com/FranzKafkaYu)提供
-
-脚本内置SSL证书申请功能，使用该脚本申请证书，需满足以下条件:
-
-- 知晓Cloudflare 注册邮箱
-- 知晓Cloudflare Global API Key
-- 域名已通过cloudflare进行解析到当前服务器
-
-获取Cloudflare Global API Key的方法:
-    ![](media/bda84fbc2ede834deaba1c173a932223.png)
-    ![](media/d13ffd6a73f938d1037d0708e31433bf.png)
-
-使用时只需输入 `域名`, `邮箱`, `API KEY`即可，示意图如下：
-        ![](media/2022-04-04_141259.png)
-
-注意事项:
-
-- 该脚本使用DNS API进行证书申请
-- 默认使用Let'sEncrypt作为CA方
-- 证书安装目录为/root/cert目录
-- 本脚本申请证书均为泛域名证书
-
-## Tg机器人使用（开发中，暂不可使用）
-
-> 此功能与教程由[FranzKafkaYu](https://github.com/FranzKafkaYu)提供
-
-X-UI支持通过Tg机器人实现每日流量通知，面板登录提醒等功能，使用Tg机器人，需要自行申请
-具体申请教程可以参考[博客链接](https://coderfan.net/how-to-use-telegram-bot-to-alarm-you-when-someone-login-into-your-vps.html)
-使用说明:在面板后台设置机器人相关参数，具体包括
-
-- Tg机器人Token
-- Tg机器人ChatId
-- Tg机器人周期运行时间，采用crontab语法  
-
-参考语法：
-- 30 * * * * * //每一分的第30s进行通知
-- @hourly      //每小时通知
-- @daily       //每天通知（凌晨零点整）
-- @every 8h    //每8小时通知  
-
-TG通知内容：
-- 节点流量使用
-- 面板登录提醒
-- 节点到期提醒
-- 流量预警提醒  
-
-更多功能规划中...
-## 建议系统
-
-- CentOS 7+
-- Ubuntu 16+
-- Debian 8+
-
-# 常见问题
-
-## 从 v2-ui 迁移
-
-首先在安装了 v2-ui 的服务器上安装最新版 x-ui，然后使用以下命令进行迁移，将迁移本机 v2-ui 的 `所有 inbound 账号数据`至 x-ui，`面板设置和用户名密码不会迁移`
-
-> 迁移成功后请 `关闭 v2-ui`并且 `重启 x-ui`，否则 v2-ui 的 inbound 会与 x-ui 的 inbound 会产生 `端口冲突`
-
-```
-x-ui v2-ui
-```
-
-## issue 关闭
-
-各种小白问题看得血压很高
-
-## Stargazers over time
-
-[![Stargazers over time](https://starchart.cc/vaxilu/x-ui.svg)](https://starchart.cc/vaxilu/x-ui)
+面板源代码遵循 [GPL-3.0](LICENSE)。发布和分发修改版本时请保留许可证、原作者归属及对应源代码。

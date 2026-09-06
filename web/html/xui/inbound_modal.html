@@ -1,79 +1,129 @@
 {{define "inboundModal"}}
-<a-modal id="inbound-modal" v-model="inModal.visible" :title="inModal.title" @ok="inModal.ok"
+<a-modal id="inbound-modal" v-model="inModal.visible" :title="inModal.title" @ok="save"
          :confirm-loading="inModal.confirmLoading" :closable="true" :mask-closable="false"
          :ok-text="inModal.okText" cancel-text='{{ i18n "close" }}'>
-    {{template "form/inbound"}}
+    <a-alert v-if="inModal.error" type="error" :message="inModal.error" show-icon style="margin-bottom:12px"></a-alert>
+    <a-form layout="inline">
+        <a-form-item label="备注"><a-input v-model.trim="inModal.dbInbound.remark" title="便于识别此入站的名称，不影响客户端连接"></a-input></a-form-item>
+        <a-form-item label="启用"><a-switch v-model="inModal.dbInbound.enable" title="关闭后此入站不接受连接，配置仍保留"></a-switch></a-form-item>
+        <a-form-item label="协议"><a-select :value="draft.protocol" @change="changeProtocol" style="width:180px"><a-select-option v-for="(spec, protocol) in editor.protocols" :key="protocol" :value="protocol">[[protocol]]</a-select-option></a-select></a-form-item>
+        <a-form-item v-if="draft.protocol !== 'tun'" label="监听 IP"><a-input v-model.trim="draft.listen" title="留空监听所有网卡；127.0.0.1 仅允许本机访问；填写服务器实际拥有的 IP 可限定网卡"></a-input></a-form-item>
+        <a-form-item v-if="draft.protocol !== 'tun'" label="端口"><a-input-number v-model="draft.port" :min="1" :max="65535" title="客户端连接的服务器端口，需要在防火墙放行对应 TCP/UDP"></a-input-number></a-form-item>
+        <a-form-item label="总流量(GB)"><a-input-number v-model="inModal.dbInbound.totalGB" :min="0" title="上传与下载流量累计到达此值后自动停用入站；0 为不限制"></a-input-number></a-form-item>
+        <a-form-item label="到期时间"><a-date-picker :show-time="{format:'HH:mm'}" format="YYYY-MM-DD HH:mm" v-model="inModal.dbInbound._expiryTime" title="到期后自动停用；留空表示永不过期"></a-date-picker></a-form-item>
+    </a-form>
+    <a-alert :message="protocolSpec.help" type="info" show-icon style="margin:12px 0"></a-alert>
+    <inbound-fields :key="'protocol-' + inModal.revision + draft.protocol" :value="draft.settings" :fields="protocolSpec.fields"></inbound-fields>
+    <a-button v-if="draft.protocol === 'shadowsocks'" @click="generateSSKey">生成匹配加密方法的密码</a-button>
+    <a-button v-if="draft.protocol === 'wireguard' || draft.streamSettings.security === 'reality'" @click="generateKeys">生成新密钥对</a-button>
+    <p v-if="inModal.publicKey">客户端公钥（请复制保存）：<a-input :value="inModal.publicKey" read-only></a-input></p>
+    <template v-if="!['tun','wireguard'].includes(draft.protocol)">
+        <a-divider>传输与安全</a-divider>
+        <a-form layout="inline">
+            <a-form-item label="传输"><a-select :value="draft.streamSettings.network || 'raw'" @change="changeNetwork" style="width:170px"><a-select-option v-for="(spec, name) in editor.transports" :key="name" :value="name">[[name]]</a-select-option></a-select></a-form-item>
+            <a-form-item label="安全"><a-select :value="draft.streamSettings.security || 'none'" @change="changeSecurity" style="width:170px"><a-select-option value="none">无</a-select-option><a-select-option value="tls">TLS</a-select-option><a-select-option value="reality">REALITY</a-select-option></a-select></a-form-item>
+        </a-form>
+        <p style="color:#888">[[transportSpec.help || '旧传输已移除，请选择受支持的传输；原始字段仍保留在高级 JSON 中。']]</p>
+        <inbound-fields v-if="transportValue" :key="'transport-' + inModal.revision + draft.streamSettings.network" :value="transportValue" :fields="transportSpec.fields || []"></inbound-fields>
+        <p style="color:#888">TLS 需要证书；REALITY 使用密钥与目标网站握手；无安全层时由协议自身决定是否加密。</p>
+        <inbound-fields v-if="securityValue" :key="'security-' + inModal.revision + draft.streamSettings.security" :value="securityValue" :fields="editor.security[draft.streamSettings.security] || []"></inbound-fields>
+    </template>
+    <a-divider>流量嗅探</a-divider>
+    <inbound-fields :key="'sniff-' + inModal.revision" :value="draft.sniffing" :fields="editor.sniffing"></inbound-fields>
+    <a-collapse style="margin-top:12px" @change="refreshAdvanced">
+        <a-collapse-panel key="json" header="高级 JSON（完整协议、传输、嗅探配置）">
+            <p>保留 Xray 的全部扩展字段，包括 sockopt、finalmask、VLESS Encryption、多用户和未来新增字段。编辑后先点击“应用 JSON”；格式或核心校验失败时不会保存。</p>
+            <a-form-item v-for="key in ['settings','streamSettings','sniffing']" :key="key" :label="key"><a-textarea v-model="inModal.json[key]" @change="inModal.jsonDirty = true" :autosize="{minRows:4,maxRows:16}"></a-textarea></a-form-item>
+            <a-button @click="applyAdvanced">应用 JSON</a-button>
+            <p>字段说明：<a href="https://xtls.github.io/config/" target="_blank" rel="noopener noreferrer">Xray 官方配置文档</a></p>
+        </a-collapse-panel>
+    </a-collapse>
 </a-modal>
 <script>
-
     const inModal = {
-        title: '',
-        visible: false,
-        confirmLoading: false,
-        okText: '确定',
-        confirm: null,
-        inbound: new Inbound(),
-        dbInbound: new DBInbound(),
-        ok() {
-            ObjectUtil.execute(inModal.confirm, inModal.inbound, inModal.dbInbound);
+        title: '', visible: false, confirmLoading: false, okText: '确定', confirm: null,
+        dbInbound: new DBInbound(), draft: InboundEditor.create(), error: '', revision: 0,
+        json: {}, jsonDirty: false, publicKey: '',
+        show({title='', okText='确定', inbound=null, dbInbound=null, confirm=()=>{}}) {
+            this.title = title; this.okText = okText; this.confirm = confirm;
+            this.dbInbound = dbInbound ? new DBInbound(dbInbound) : new DBInbound();
+            this.draft = dbInbound ? {
+                protocol: dbInbound.protocol, port: dbInbound.port, listen: dbInbound.listen,
+                settings: JSON.parse(dbInbound.settings || '{}'),
+                streamSettings: JSON.parse(dbInbound.streamSettings || '{}'),
+                sniffing: JSON.parse(dbInbound.sniffing || '{}'),
+            } : InboundEditor.create();
+            this.error = ''; this.publicKey = ''; this.jsonDirty = false; this.revision++; this.visible = true;
         },
-        show({ title='', okText='确定', inbound=null, dbInbound=null, confirm=(inbound, dbInbound)=>{} }) {
-            this.title = title;
-            this.okText = okText;
-            if (inbound) {
-                this.inbound = Inbound.fromJson(inbound.toJson());
-            } else {
-                this.inbound = new Inbound();
-            }
-            if (dbInbound) {
-                this.dbInbound = new DBInbound(dbInbound);
-            } else {
-                this.dbInbound = new DBInbound();
-            }
-            this.confirm = confirm;
-            this.visible = true;
-        },
-        close() {
-            inModal.visible = false;
-            inModal.loading(false);
-        },
-        loading(loading) {
-            inModal.confirmLoading = loading;
-        },
+        close() { this.visible = false; this.confirmLoading = false; },
+        loading(value=true) { this.confirmLoading = value; },
     };
-
-    const protocols = {
-        VMESS: Protocols.VMESS,
-        VLESS: Protocols.VLESS,
-        TROJAN: Protocols.TROJAN,
-        SHADOWSOCKS: Protocols.SHADOWSOCKS,
-        DOKODEMO: Protocols.DOKODEMO,
-        SOCKS: Protocols.SOCKS,
-        HTTP: Protocols.HTTP,
-    };
-
     new Vue({
-        delimiters: ['[[', ']]'],
-        el: '#inbound-modal',
-        data: {
-            inModal: inModal,
-            Protocols: protocols,
-            SSMethods: SSMethods,
-            get inbound() {
-                return inModal.inbound;
-            },
-            get dbInbound() {
-                return inModal.dbInbound;
-            }
+        delimiters: ['[[', ']]'], el: '#inbound-modal', data: {inModal, editor: InboundEditor},
+        computed: {
+            draft() { return this.inModal.draft; },
+            protocolSpec() { return this.editor.protocols[this.draft.protocol] || {help:'未知协议，请选择受支持的协议。',fields:[]}; },
+            transportSpec() { return this.editor.transports[this.draft.streamSettings.network || 'raw'] || {}; },
+            transportValue() { return this.draft.streamSettings[this.transportSpec.key]; },
+            securityValue() { return this.draft.streamSettings[this.draft.streamSettings.security + 'Settings']; },
         },
         methods: {
-            streamNetworkChange(oldValue) {
-                if (oldValue === 'kcp') {
-                    this.inModal.inbound.tls = false;
-                }
-            }
-        }
+            generateSSKey() {
+                const size=this.draft.settings.method === '2022-blake3-aes-128-gcm' ? 16 : 32;
+                const bytes=new Uint8Array(size); crypto.getRandomValues(bytes);
+                this.$set(this.draft.settings,'password',btoa(String.fromCharCode(...bytes)));
+            },
+            async generateKeys() {
+                const kind = this.draft.protocol === 'wireguard' ? 'wireguard' : 'reality';
+                const msg = await HttpUtil.post('/xui/inbound/keys', {kind});
+                if (!msg.success) { this.inModal.error = msg.msg; return; }
+                if (kind === 'wireguard') this.$set(this.draft.settings, 'secretKey', msg.obj.privateKey);
+                else this.$set(this.securityValue, 'privateKey', msg.obj.privateKey);
+                this.inModal.publicKey = msg.obj.publicKey;
+            },
+            hasInvalidFields() { return this.$children.some(function invalid(child) { return (child.errors && Object.keys(child.errors).length > 0) || child.$children.some(invalid); }); },
+            changeProtocol(protocol) {
+                const next = this.editor.create(protocol);
+                next.port = protocol === 'tun' ? 0 : (this.draft.port || next.port);
+                next.listen = this.draft.listen;
+                this.inModal.draft = next; this.inModal.revision++; this.inModal.jsonDirty = false;
+                this.refreshAdvanced();
+            },
+            changeNetwork(network) {
+                this.$set(this.draft.streamSettings, 'network', network);
+                const key = this.editor.transports[network].key;
+                if (!this.draft.streamSettings[key]) this.$set(this.draft.streamSettings, key, network === 'hysteria' ? {version:2} : {});
+            },
+            changeSecurity(security) {
+                this.$set(this.draft.streamSettings, 'security', security);
+                const key = security + 'Settings';
+                if (security !== 'none' && !this.draft.streamSettings[key]) this.$set(this.draft.streamSettings, key, security === 'tls' ? {certificates:[]} : {serverNames:[],shortIds:[]});
+            },
+            refreshAdvanced() {
+                if (this.inModal.jsonDirty) return;
+                this.inModal.json = Object.fromEntries(['settings','streamSettings','sniffing'].map(key => [key, JSON.stringify(this.draft[key], null, 2)]));
+            },
+            applyAdvanced() {
+                try {
+                    const parsed = {};
+                    for (const key of ['settings','streamSettings','sniffing']) {
+                        parsed[key] = JSON.parse(this.inModal.json[key]);
+                        if (!parsed[key] || Array.isArray(parsed[key]) || typeof parsed[key] !== 'object') throw Error(key + ' 必须是 JSON 对象');
+                    }
+                    Object.assign(this.draft, parsed); this.inModal.jsonDirty = false; this.inModal.revision++; this.inModal.error = '';
+                } catch (err) { this.inModal.error = err.message; }
+            },
+            async save() {
+                try {
+                    if (this.inModal.jsonDirty) throw Error('高级 JSON 尚未应用，请先点击“应用 JSON”');
+                    if (this.hasInvalidFields()) throw Error('请先修正标红字段的 JSON 格式');
+                    const config = this.editor.validate(this.editor.copy(this.draft));
+                    this.inModal.error = ''; this.inModal.loading();
+                    await this.inModal.confirm(config, this.inModal.dbInbound);
+                } catch (err) { this.inModal.error = err.message; }
+                finally { this.inModal.loading(false); }
+            },
+        },
     });
-
 </script>
 {{end}}

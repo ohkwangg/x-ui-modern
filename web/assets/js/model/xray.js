@@ -5,6 +5,11 @@ const Protocols = {
     SHADOWSOCKS: 'shadowsocks',
     DOKODEMO: 'dokodemo-door',
     MTPROTO: 'mtproto',
+    MIXED: 'mixed',
+    TUNNEL: 'tunnel',
+    WIREGUARD: 'wireguard',
+    HYSTERIA: 'hysteria',
+    TUN: 'tun',
     SOCKS: 'socks',
     HTTP: 'http',
 };
@@ -691,9 +696,9 @@ class Inbound extends XrayCommonClass {
     get uuid() {
         switch (this.protocol) {
             case Protocols.VMESS:
-                return this.settings.vmesses[0].id;
+                return (this.settings.vmesses[0] || {}).id;
             case Protocols.VLESS:
-                return this.settings.vlesses[0].id;
+                return (this.settings.vlesses[0] || {}).id;
             default:
                 return "";
         }
@@ -703,9 +708,9 @@ class Inbound extends XrayCommonClass {
     get flow() {
         switch (this.protocol) {
             case Protocols.VLESS:
-                return this.settings.vlesses[0].flow;
+                return (this.settings.vlesses[0] || {}).flow;
             case Protocols.TROJAN:
-                return this.settings.clients[0].flow;
+                return (this.settings.clients[0] || {}).flow;
             default:
                 return "";
         }
@@ -715,7 +720,7 @@ class Inbound extends XrayCommonClass {
     get alterId() {
         switch (this.protocol) {
             case Protocols.VMESS:
-                return this.settings.vmesses[0].alterId;
+                return (this.settings.vmesses[0] || {}).alterId;
             default:
                 return "";
         }
@@ -726,7 +731,7 @@ class Inbound extends XrayCommonClass {
         switch (this.protocol) {
             case Protocols.SOCKS:
             case Protocols.HTTP:
-                return this.settings.accounts[0].user;
+                return (this.settings.accounts[0] || {}).user;
             default:
                 return "";
         }
@@ -736,12 +741,12 @@ class Inbound extends XrayCommonClass {
     get password() {
         switch (this.protocol) {
             case Protocols.TROJAN:
-                return this.settings.clients[0].password;
+                return (this.settings.clients[0] || {}).password;
             case Protocols.SHADOWSOCKS:
                 return this.settings.password;
             case Protocols.SOCKS:
             case Protocols.HTTP:
-                return this.settings.accounts[0].pass;
+                return (this.settings.accounts[0] || {}).pass;
             default:
                 return "";
         }
@@ -934,8 +939,8 @@ class Inbound extends XrayCommonClass {
             ps: remark,
             add: address,
             port: this.port,
-            id: this.settings.vmesses[0].id,
-            aid: this.settings.vmesses[0].alterId,
+            id: (this.settings.vmesses[0] || {}).id,
+            aid: (this.settings.vmesses[0] || {}).alterId,
             net: network,
             type: type,
             host: host,
@@ -1009,7 +1014,7 @@ class Inbound extends XrayCommonClass {
         }
 
         if (this.xtls) {
-            params.set("flow", this.settings.vlesses[0].flow);
+            params.set("flow", (this.settings.vlesses[0] || {}).flow);
         }
 
         const link = `vless://${uuid}@${address}:${port}`;
@@ -1091,15 +1096,16 @@ Inbound.Settings = class extends XrayCommonClass {
             case Protocols.MTPROTO: return new Inbound.MtprotoSettings(protocol);
             case Protocols.SOCKS: return new Inbound.SocksSettings(protocol);
             case Protocols.HTTP: return new Inbound.HttpSettings(protocol);
-            default: return null;
+            default: return new RawXraySettings({});
         }
     }
 
     static fromJson(protocol, json) {
+        if (!json) json = {};
         switch (protocol) {
-            case Protocols.VMESS: return Inbound.VmessSettings.fromJson(json);
-            case Protocols.VLESS: return Inbound.VLESSSettings.fromJson(json);
-            case Protocols.TROJAN: return Inbound.TrojanSettings.fromJson(json);
+            case Protocols.VMESS: return Inbound.VmessSettings.fromJson({...json, clients: json.clients || json.users || []});
+            case Protocols.VLESS: return Inbound.VLESSSettings.fromJson({...json, clients: json.clients || json.users || []});
+            case Protocols.TROJAN: return Inbound.TrojanSettings.fromJson({...json, clients: json.clients || json.users || []});
             case Protocols.SHADOWSOCKS: return Inbound.ShadowsocksSettings.fromJson(json);
             case Protocols.DOKODEMO: return Inbound.DokodemoSettings.fromJson(json);
             case Protocols.MTPROTO: return Inbound.MtprotoSettings.fromJson(json);
@@ -1537,3 +1543,8 @@ Inbound.HttpSettings.HttpAccount = class extends XrayCommonClass {
         return new Inbound.HttpSettings.HttpAccount(json.user, json.pass);
     }
 };
+
+class RawXraySettings extends XrayCommonClass {
+    constructor(value) { super(); this.value = value; }
+    toJson() { return this.value; }
+}

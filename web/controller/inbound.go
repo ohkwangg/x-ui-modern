@@ -1,7 +1,9 @@
 package controller
 
 import (
-	"fmt"
+	"crypto/ecdh"
+	"crypto/rand"
+	"encoding/base64"
 	"github.com/gin-gonic/gin"
 	"strconv"
 	"x-ui/database/model"
@@ -30,6 +32,21 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/add", a.addInbound)
 	g.POST("/del/:id", a.delInbound)
 	g.POST("/update/:id", a.updateInbound)
+	g.POST("/keys", a.generateKeys)
+}
+
+func (a *InboundController) generateKeys(c *gin.Context) {
+	key, err := ecdh.X25519().GenerateKey(rand.Reader)
+	if err != nil {
+		jsonMsg(c, "生成密钥", err)
+		return
+	}
+	encoding := base64.RawURLEncoding
+	if c.PostForm("kind") == "wireguard" {
+		encoding = base64.StdEncoding
+	}
+	c.Header("Cache-Control", "no-store")
+	jsonObj(c, gin.H{"privateKey": encoding.EncodeToString(key.Bytes()), "publicKey": encoding.EncodeToString(key.PublicKey().Bytes())}, nil)
 }
 
 func (a *InboundController) startTask() {
@@ -64,8 +81,6 @@ func (a *InboundController) addInbound(c *gin.Context) {
 	}
 	user := session.GetLoginUser(c)
 	inbound.UserId = user.Id
-	inbound.Enable = true
-	inbound.Tag = fmt.Sprintf("inbound-%v", inbound.Port)
 	err = a.inboundService.AddInbound(inbound)
 	jsonMsg(c, "添加", err)
 	if err == nil {

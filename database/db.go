@@ -1,7 +1,7 @@
 package database
 
 import (
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"io/fs"
@@ -34,6 +34,25 @@ func initUser() error {
 }
 
 func initInbound() error {
+	if db.Migrator().HasTable(&model.Inbound{}) {
+		columns, err := db.Migrator().ColumnTypes(&model.Inbound{})
+		if err != nil {
+			return err
+		}
+		for _, column := range columns {
+			if unique, _ := column.Unique(); column.Name() == "port" && unique {
+				if err := db.Migrator().AlterColumn(&model.Inbound{}, "Port"); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	// Original x-ui created a named UNIQUE constraint on port. TUN has no port.
+	if db.Migrator().HasConstraint(&model.Inbound{}, "uni_inbounds_port") {
+		if err := db.Migrator().DropConstraint(&model.Inbound{}, "uni_inbounds_port"); err != nil {
+			return err
+		}
+	}
 	return db.AutoMigrate(&model.Inbound{})
 }
 

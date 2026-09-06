@@ -237,9 +237,7 @@
                     title: '添加入站',
                     okText: '添加',
                     confirm: async (inbound, dbInbound) => {
-                        inModal.loading();
                         await this.addInbound(inbound, dbInbound);
-                        inModal.close();
                     }
                 });
             },
@@ -251,9 +249,7 @@
                     inbound: inbound,
                     dbInbound: dbInbound,
                     confirm: async (inbound, dbInbound) => {
-                        inModal.loading();
                         await this.updateInbound(inbound, dbInbound);
-                        inModal.close();
                     }
                 });
             },
@@ -269,9 +265,9 @@
                     listen: inbound.listen,
                     port: inbound.port,
                     protocol: inbound.protocol,
-                    settings: inbound.settings.toString(),
-                    streamSettings: inbound.stream.toString(),
-                    sniffing: inbound.canSniffing() ? inbound.sniffing.toString() : '{}',
+                    settings: JSON.stringify(inbound.settings),
+                    streamSettings: JSON.stringify(inbound.streamSettings),
+                    sniffing: JSON.stringify(inbound.sniffing),
                 };
                 await this.submit('/xui/inbound/add', data, inModal);
             },
@@ -287,9 +283,9 @@
                     listen: inbound.listen,
                     port: inbound.port,
                     protocol: inbound.protocol,
-                    settings: inbound.settings.toString(),
-                    streamSettings: inbound.stream.toString(),
-                    sniffing: inbound.canSniffing() ? inbound.sniffing.toString() : '{}',
+                    settings: JSON.stringify(inbound.settings),
+                    streamSettings: JSON.stringify(inbound.streamSettings),
+                    sniffing: JSON.stringify(inbound.sniffing),
                 };
                 await this.submit(`/xui/inbound/update/${dbInbound.id}`, data, inModal);
             },
@@ -300,7 +296,7 @@
                     okText: '重置',
                     cancelText: '取消',
                     onOk: () => {
-                        const inbound = dbInbound.toInbound();
+                        const inbound = dbInbound.toInbound().toJson();
                         dbInbound.up = 0;
                         dbInbound.down = 0;
                         this.updateInbound(inbound, dbInbound);
@@ -330,6 +326,9 @@
                 const msg = await HttpUtil.postWithModal(url, data, modal);
                 if (msg.success) {
                     await this.getDBInbounds();
+                    if (modal) modal.close();
+                } else if (modal) {
+                    modal.error = msg.msg || '保存失败';
                 }
             },
         },
