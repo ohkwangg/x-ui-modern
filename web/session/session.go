@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"net/http"
 	"x-ui/database/model"
 )
 
@@ -17,6 +18,10 @@ func init() {
 
 func SetLoginUser(c *gin.Context, user *model.User) error {
 	s := sessions.Default(c)
+	s.Options(sessions.Options{
+		Path: "/", MaxAge: 86400 * 30, HttpOnly: true,
+		SameSite: http.SameSiteLaxMode, Secure: c.Request.TLS != nil,
+	})
 	s.Set(loginUser, user)
 	return s.Save()
 }

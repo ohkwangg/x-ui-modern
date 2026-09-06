@@ -168,6 +168,10 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	assetsBasePath := basePath + "assets/"
 
 	store := cookie.NewStore(secret)
+	// Explicit options avoid upstream HTTPS-only defaults breaking HTTP panels.
+	store.Options(sessions.Options{
+		Path: "/", MaxAge: 86400 * 30, HttpOnly: true, SameSite: http.SameSiteLaxMode,
+	})
 	engine.Use(sessions.Sessions("session", store))
 	engine.Use(func(c *gin.Context) {
 		c.Set("base_path", basePath)
